@@ -1,16 +1,32 @@
 import React, { useState } from 'react';
-import { DISEASE_LIST, DISEASE_MEDICINES, DOCTORS } from '../data/mockData';
+import { useMedicines } from '../hooks/useMedicines';
 import { formatCurrency } from '../utils/helpers';
 
 export default function ExaminationPage({ patients, onSaveExam, onAddPatient }) {
+  const { diseaseList, diseaseMedicines, doctors } = useMedicines();
   const [search, setSearch] = useState('');
   const [selectedPatient, setSelectedPatient] = useState(null);
   const [form, setForm] = useState({
-    disease: '', symptoms: '', doctor: DOCTORS[0], notes: '', fee: '',
+    disease: '', symptoms: '', doctor: doctors[0] || '', notes: '', fee: '',
   });
   const [medicines, setMedicines] = useState([]);
   const [showDiseaseSuggestions, setShowDiseaseSuggestions] = useState(false);
   const [saved, setSaved] = useState(false);
+  const [showMedicineSelector, setShowMedicineSelector] = useState(false);
+  const [medicineSearch, setMedicineSearch] = useState('');
+  const [customMedicine, setCustomMedicine] = useState({ name: '', usage: '', dose: '', days: '' });
+
+  // Lấy tất cả thuốc từ diseaseMedicines
+  const allMedicines = [];
+  Object.entries(diseaseMedicines).forEach(([disease, meds]) => {
+    meds.forEach(m => allMedicines.push({ ...m, disease }));
+  });
+
+  // Filter thuốc theo search
+  const filteredMedicines = allMedicines.filter(m =>
+    m.name.toLowerCase().includes(medicineSearch.toLowerCase()) ||
+    m.disease.toLowerCase().includes(medicineSearch.toLowerCase())
+  );
 
   const filteredPatients = search
     ? patients.filter(p =>
@@ -20,7 +36,7 @@ export default function ExaminationPage({ patients, onSaveExam, onAddPatient }) 
       )
     : [];
 
-  const filteredDiseases = DISEASE_LIST.filter(d =>
+  const filteredDiseases = diseaseList.filter(d =>
     d.toLowerCase().includes(form.disease.toLowerCase()) && form.disease
   );
 
@@ -28,26 +44,86 @@ export default function ExaminationPage({ patients, onSaveExam, onAddPatient }) 
     setSelectedPatient(p);
     setSearch(p.name);
     setSaved(false);
-    setForm({ disease: '', symptoms: '', doctor: DOCTORS[0], notes: '', fee: '' });
+    setForm({ disease: '', symptoms: '', doctor: doctors[0], notes: '', fee: '' });
     setMedicines([]);
   };
 
   const handleDiseaseChange = (val) => {
     setForm(f => ({ ...f, disease: val }));
-    setMedicines(DISEASE_MEDICINES[val] || []);
     setShowDiseaseSuggestions(true);
+    // Không tự động set medicines
   };
 
   const handleDiseaseSelect = (disease) => {
     setForm(f => ({ ...f, disease }));
-    setMedicines(DISEASE_MEDICINES[disease] || []);
     setShowDiseaseSuggestions(false);
   };
 
+  const handleLoadSuggestedMedicines = () => {
+    if (!form.disease) {
+      alert('Vui lòng chọn bệnh trước!');
+      return;
+    }
+    const suggested = diseaseMedicines[form.disease] || [];
+    if (suggested.length === 0) {
+      alert('Không có thuốc gợi ý cho bệnh này!');
+      return;
+    }
+    setMedicines(suggested);
+  };
+
+  const handleAddMedicineFromList = (medicine) => {
+    const exists = medicines.some(m => m.name === medicine.name);
+    if (exists) {
+      alert('Thuốc này đã có trong đơn!');
+      return;
+    }
+    setMedicines([...medicines, medicine]);
+    setMedicineSearch('');
+  };
+
+  const handleAddCustomMedicine = () => {
+    if (!customMedicine.name.trim()) return alert('Vui lòng nhập tên thuốc!');
+    if (!customMedicine.dose.trim()) return alert('Vui lòng nhập liều dùng!');
+    if (!customMedicine.days) return alert('Vui lòng nhập số ngày!');
+
+    setMedicines([...medicines, { ...customMedicine, days: parseInt(customMedicine.days) }]);
+    setCustomMedicine({ name: '', usage: '', dose: '', days: '' });
+  };
+
+  const handleRemoveMedicine = (index) => {
+    setMedicines(medicines.filter((_, i) => i !== index));
+  };
+
   const handleSave = () => {
-    if (!selectedPatient) return alert('Vui lòng chọn bệnh nhân!');
-    if (!form.disease.trim()) return alert('Vui lòng nhập bệnh / chẩn đoán!');
-    if (!form.symptoms.trim()) return alert('Vui lòng nhập triệu chứng!');
+    console.log('=== START SAVE EXAM ===');
+    console.log('Selected Patient:', selectedPatient);
+    console.log('Form data:', form);
+    console.log('Medicines:', medicines);
+    
+    if (!selectedPatient) {
+      console.error('ERROR: No patient selected');
+      return alert('Vui lòng chọn bệnh nhân!');
+    }
+    
+    if (!form.disease.trim()) {
+      console.error('ERROR: No disease');
+      return alert('Vui lòng nhập bệnh / chẩn đoán!');
+    }
+    
+    if (!form.symptoms.trim()) {
+      console.error('ERROR: No symptoms');
+      return alert('Vui lòng nhập triệu chứng!');
+    }
+    
+    if (medicines.length === 0) {
+      console.warn('WARNING: No medicines');
+      const confirm = window.confirm('Đơn thuốc đang trống. Bạn có chắc muốn lưu không?');
+      if (!confirm) {
+        console.log('User cancelled - no medicines');
+        return;
+      }
+    }
 
     const exam = {
       id: 'KB' + Date.now(),
@@ -59,16 +135,30 @@ export default function ExaminationPage({ patients, onSaveExam, onAddPatient }) 
       notes: form.notes,
       fee: parseInt(form.fee) || 0,
     };
-    onSaveExam(selectedPatient.id, exam);
-    setSaved(true);
+    
+    console.log('Exam object created:', exam);
+    console.log('Calling onSaveExam with:', { patientId: selectedPatient.id, exam });
+    
+    try {
+      onSaveExam(selectedPatient.id, exam);
+      console.log('onSaveExam called successfully');
+      setSaved(true);
+    } catch (error) {
+      console.error('ERROR in handleSave:', error);
+      alert('Lỗi: ' + error.message);
+    }
+    
+    console.log('=== END SAVE EXAM ===');
   };
 
   const handleReset = () => {
     setSelectedPatient(null);
     setSearch('');
-    setForm({ disease: '', symptoms: '', doctor: DOCTORS[0], notes: '', fee: '' });
+    setForm({ disease: '', symptoms: '', doctor: doctors[0] || '', notes: '', fee: '' });
     setMedicines([]);
     setSaved(false);
+    setShowMedicineSelector(false);
+    setMedicineSearch('');
   };
 
   const lastExam = selectedPatient?.examHistory?.[selectedPatient.examHistory.length - 1];
@@ -159,7 +249,7 @@ export default function ExaminationPage({ patients, onSaveExam, onAddPatient }) 
                 <div className="form-group">
                   <label className="form-label">Bác sĩ</label>
                   <select id="ex-doctor" className="form-select" value={form.doctor} onChange={e => setForm(f => ({ ...f, doctor: e.target.value }))}>
-                    {DOCTORS.map(d => <option key={d}>{d}</option>)}
+                    {doctors.map(d => <option key={d}>{d}</option>)}
                   </select>
                 </div>
                 <div className="form-group">
@@ -171,6 +261,103 @@ export default function ExaminationPage({ patients, onSaveExam, onAddPatient }) 
                 <label className="form-label">Ghi chú / Lời dặn</label>
                 <textarea id="ex-notes" className="form-textarea" placeholder="Lời dặn cho bệnh nhân..." value={form.notes} onChange={e => setForm(f => ({ ...f, notes: e.target.value }))} />
               </div>
+
+              {/* Medicines Section */}
+              <div style={{ padding: '16px', background: 'var(--bg-secondary)', borderRadius: 10, border: '1px solid var(--border)' }}>
+                <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--text-primary)', marginBottom: 12, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                    💊 Đơn thuốc
+                    <span className="badge badge-blue">{medicines.length} loại</span>
+                  </div>
+                  <div style={{ display: 'flex', gap: 6 }}>
+                    {form.disease && (
+                      <button
+                        className="btn btn-ghost btn-sm"
+                        onClick={handleLoadSuggestedMedicines}
+                        style={{ fontSize: 10, padding: '4px 8px' }}
+                      >
+                        ✨ Gợi ý
+                      </button>
+                    )}
+                    <button
+                      className="btn btn-primary btn-sm"
+                      onClick={() => setShowMedicineSelector(!showMedicineSelector)}
+                      style={{ fontSize: 10, padding: '4px 8px' }}
+                    >
+                      {showMedicineSelector ? '✕' : '➕ Chọn'}
+                    </button>
+                  </div>
+                </div>
+
+                {/* Medicine Selector */}
+                {showMedicineSelector && (
+                  <div style={{ marginBottom: 12, padding: 10, background: 'var(--bg-primary)', borderRadius: 8, border: '1px solid var(--border)' }}>
+                    <input
+                      className="form-input"
+                      placeholder="Tìm tên thuốc..."
+                      value={medicineSearch}
+                      onChange={e => setMedicineSearch(e.target.value)}
+                      style={{ fontSize: 11, marginBottom: 6 }}
+                    />
+                    <div style={{ maxHeight: 150, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 4 }}>
+                      {medicineSearch && filteredMedicines.length > 0 ? (
+                        filteredMedicines.slice(0, 8).map((m, i) => (
+                          <div
+                            key={i}
+                            style={{
+                              padding: '6px 8px',
+                              background: 'var(--bg-secondary)',
+                              borderRadius: 6,
+                              cursor: 'pointer',
+                              border: '1px solid var(--border)',
+                              fontSize: 11
+                            }}
+                            onClick={() => handleAddMedicineFromList(m)}
+                          >
+                            <div style={{ fontWeight: 600 }}>💊 {m.name}</div>
+                            <div style={{ fontSize: 10, color: 'var(--text-secondary)' }}>
+                              {m.dose} · {m.days} ngày
+                            </div>
+                          </div>
+                        ))
+                      ) : medicineSearch ? (
+                        <div style={{ padding: 8, textAlign: 'center', color: 'var(--text-muted)', fontSize: 10 }}>
+                          Không tìm thấy
+                        </div>
+                      ) : (
+                        <div style={{ padding: 8, textAlign: 'center', color: 'var(--text-muted)', fontSize: 10 }}>
+                          Nhập tên thuốc
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                )}
+
+                {medicines.length > 0 ? (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                    {medicines.map((m, i) => (
+                      <div key={i} style={{ padding: '8px 10px', background: 'var(--bg-primary)', borderRadius: 6, border: '1px solid var(--border)', position: 'relative' }}>
+                        <div style={{ fontSize: 12, fontWeight: 600, marginBottom: 2 }}>{m.name}</div>
+                        <div style={{ fontSize: 10, color: 'var(--text-secondary)' }}>
+                          {m.usage && `${m.usage} · `}{m.dose} · {m.days} ngày
+                        </div>
+                        <button
+                          className="btn btn-ghost btn-sm"
+                          style={{ position: 'absolute', top: 4, right: 4, padding: '2px 6px', fontSize: 10 }}
+                          onClick={() => handleRemoveMedicine(i)}
+                        >
+                          ✕
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <div style={{ padding: 12, textAlign: 'center', color: 'var(--text-muted)', fontSize: 11 }}>
+                    Chưa có thuốc
+                  </div>
+                )}
+              </div>
+
               <button id="btn-save-exam-page" className="btn btn-success" style={{ width: '100%', justifyContent: 'center' }} onClick={handleSave}>
                 ✅ Lưu phiếu khám
               </button>
@@ -239,7 +426,7 @@ export default function ExaminationPage({ patients, onSaveExam, onAddPatient }) 
         <div className="card">
           <div className="card-title" style={{ marginBottom: 10 }}>📖 Tra cứu nhanh</div>
           <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
-            {DISEASE_LIST.map(d => (
+            {diseaseList.map(d => (
               <span
                 key={d}
                 className="badge badge-gray"

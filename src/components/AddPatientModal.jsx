@@ -1,23 +1,24 @@
 import React, { useState } from 'react';
-import { DISEASE_LIST, DISEASE_MEDICINES, DOCTORS } from '../data/mockData';
+import { useMedicines } from '../hooks/useMedicines';
 
 export default function AddPatientModal({ onClose, onSave }) {
+  const { diseaseList, diseaseMedicines, doctors } = useMedicines();
   const [form, setForm] = useState({
     name: '', dob: '', gender: 'Nữ', phone: '', address: '',
     bloodType: '', insurance: '',
     // First exam
-    disease: '', symptoms: '', doctor: DOCTORS[0], notes: '', fee: '',
+    disease: '', symptoms: '', doctor: doctors[0], notes: '', fee: '',
   });
   const [showSuggestions, setShowSuggestions] = useState(false);
   const [medicines, setMedicines] = useState([]);
 
-  const filteredDiseases = DISEASE_LIST.filter(d =>
+  const filteredDiseases = diseaseList.filter(d =>
     d.toLowerCase().includes(form.disease.toLowerCase()) && form.disease
   );
 
   const handleDiseaseSelect = (disease) => {
     setForm(f => ({ ...f, disease }));
-    setMedicines(DISEASE_MEDICINES[disease] || []);
+    setMedicines(diseaseMedicines[disease] || []);
     setShowSuggestions(false);
   };
 
@@ -25,11 +26,11 @@ export default function AddPatientModal({ onClose, onSave }) {
     setForm(f => ({ ...f, [field]: value }));
     if (field === 'disease') {
       setShowSuggestions(true);
-      setMedicines(DISEASE_MEDICINES[value] || []);
+      setMedicines(diseaseMedicines[value] || []);
     }
   };
 
-  const handleSubmit = () => {
+  const handleSubmit = async () => {
     if (!form.name.trim()) return alert('Vui lòng nhập tên bệnh nhân!');
     if (!form.dob) return alert('Vui lòng nhập ngày sinh!');
     if (!form.phone.trim()) return alert('Vui lòng nhập số điện thoại!');
@@ -42,20 +43,22 @@ export default function AddPatientModal({ onClose, onSave }) {
       phone: form.phone,
       address: form.address,
       bloodType: form.bloodType,
-      insurance: form.insurance,
-      createdAt: new Date().toISOString().split('T')[0],
-      examHistory: form.disease ? [{
-        id: 'KB' + Date.now(),
-        date: new Date().toISOString().split('T')[0],
-        disease: form.disease,
-        symptoms: form.symptoms,
-        doctor: form.doctor,
-        medicines: medicines,
-        notes: form.notes,
-        fee: parseInt(form.fee) || 0,
-      }] : [],
+      insurance: form.insurance
     };
-    onSave(newPatient);
+    
+    // Nếu có thông tin khám đầu tiên
+    const firstExam = form.disease ? {
+      id: 'KB' + Date.now(),
+      date: new Date().toISOString().split('T')[0],
+      disease: form.disease,
+      symptoms: form.symptoms,
+      doctor: form.doctor,
+      medicines: medicines,
+      notes: form.notes,
+      fee: parseInt(form.fee) || 0,
+    } : null;
+    
+    onSave(newPatient, firstExam);
     onClose();
   };
 
@@ -182,7 +185,7 @@ export default function AddPatientModal({ onClose, onSave }) {
             <div className="form-group">
               <label className="form-label">Bác sĩ khám</label>
               <select id="pat-doctor" className="form-select" value={form.doctor} onChange={e => handleChange('doctor', e.target.value)}>
-                {DOCTORS.map(d => <option key={d}>{d}</option>)}
+                {doctors.map(d => <option key={d}>{d}</option>)}
               </select>
             </div>
             <div className="form-group">

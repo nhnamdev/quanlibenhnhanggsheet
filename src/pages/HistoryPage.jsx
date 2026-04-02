@@ -13,7 +13,19 @@ export default function HistoryPage({ patients, onViewPatient }) {
       allExams.push({ ...e, patient: p });
     });
   });
-  allExams.sort((a, b) => new Date(b.date) - new Date(a.date));
+  
+  // Sort by date (newest first) - handle both 'date' and 'examDate'
+  allExams.sort((a, b) => {
+    const dateA = new Date(a.date || a.examDate);
+    const dateB = new Date(b.date || b.examDate);
+    return dateB - dateA;
+  });
+  
+  console.log('All exams sorted:', allExams.map(e => ({ 
+    disease: e.disease, 
+    date: e.date || e.examDate,
+    patient: e.patient.name 
+  })));
 
   // Filter
   const filtered = allExams.filter(e => {

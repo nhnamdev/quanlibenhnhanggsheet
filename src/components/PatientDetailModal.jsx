@@ -1,6 +1,5 @@
 import React from 'react';
 import { formatCurrency, formatDate, calcAge } from '../utils/helpers';
-import { DISEASE_MEDICINES } from '../data/mockData';
 
 export default function PatientDetailModal({ patient, onClose, onAddExam }) {
   if (!patient) return null;
